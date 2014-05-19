@@ -1,0 +1,14 @@
+#!/bin/bash
+regex="[0-9a-f]{7} ([0-9a-f]{4}) ([0-9a-f]{4}) ([0-9a-f]{4}) ([0-9a-f]{4}) ([0-9a-f]{4}) ([0-9a-f]{4}) ([0-9a-f]{4}) ([0-9a-f]{4})"
+
+while read p; do
+    if [[ $p =~ $regex ]]
+    then        
+        echo "0x${BASH_REMATCH[2]}${BASH_REMATCH[1]},"
+        echo "0x${BASH_REMATCH[4]}${BASH_REMATCH[3]},"
+        echo "0x${BASH_REMATCH[6]}${BASH_REMATCH[5]},"
+        echo "0x${BASH_REMATCH[8]}${BASH_REMATCH[7]},"
+    fi
+done < $1
+
+exit 0
