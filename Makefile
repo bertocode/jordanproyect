@@ -55,7 +55,7 @@ clean_gdb:
 #	$(OBJCOPY) $@.axf -O ihex $@.hex
 
 $(TARGETS) : % : $(OBJS) %.o 
-	$(CC) -o $@.axf $^ $(EXTRA_OBJS) -T$@-mem.ld $(LDSCRIPT) $(LDFLAGS) $(LDLIBS)
+	$(CC) -o $@.axf $^ $(EXTRA_OBJS) -T$@-mem.ld $(LDFLAGS) $(LDLIBS)
 	$(SIZE) $@.axf
 #	$(OBJCOPY) $@.axf -O ihex $@.hex
 	
