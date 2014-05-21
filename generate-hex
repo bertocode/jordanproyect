@@ -1,13 +1,16 @@
 #!/bin/bash
-regex="[0-9a-f]{7} ([0-9a-f]{4}) ([0-9a-f]{4}) ([0-9a-f]{4}) ([0-9a-f]{4}) ([0-9a-f]{4}) ([0-9a-f]{4}) ([0-9a-f]{4}) ([0-9a-f]{4})"
+
+# :10 5000 00 00200020 F5530008 91520008 93520008 38
+# ([0-9A-F]{2})([0-9A-F]{4})([0-9A-F]{2})([0-9A-F]{2})([0-9A-F]{2})([0-9A-F]{2})([0-9A-F]{2})([0-9A-F]{2})([0-9A-F]{2})([0-9A-F]{2})([0-9A-F]{2})([0-9A-F]{2})([0-9A-F]{2})([0-9A-F]{2})([0-9A-F]{2})([0-9A-F]{2})([0-9A-F]{2})([0-9A-F]{2})([0-9A-F]{2})([0-9A-F]{2})
+# | SIZE       | ADDR       | TYPE      | W0B0       | W0B1       | W0B2       | W0B3       | W1B0       | W1B1       | W1B2       | W1B3       | W2B0       | W2B1       | W2B2       | W2B3       | W3B0       | W3B1       | W3B2       | W3B3       |  CHECKSUM  |
+# | 1          | 2          | 3         | 4          | 5          | 6          | 7          | 8          | 9          | 10         | 11         | 12         | 13         | 14         | 15         | 16         | 17         | 18         | 19         |  20        |
+
+regex="([0-9A-F]{2})([0-9A-F]{4})([0-9A-F]{2})([0-9A-F]{2})([0-9A-F]{2})([0-9A-F]{2})([0-9A-F]{2})([0-9A-F]{2})([0-9A-F]{2})([0-9A-F]{2})([0-9A-F]{2})([0-9A-F]{2})([0-9A-F]{2})([0-9A-F]{2})([0-9A-F]{2})([0-9A-F]{2})([0-9A-F]{2})([0-9A-F]{2})([0-9A-F]{2})([0-9A-F]{2})"
 
 while read p; do
     if [[ $p =~ $regex ]]
     then        
-        echo "0x${BASH_REMATCH[2]}${BASH_REMATCH[1]},"
-        echo "0x${BASH_REMATCH[4]}${BASH_REMATCH[3]},"
-        echo "0x${BASH_REMATCH[6]}${BASH_REMATCH[5]},"
-        echo "0x${BASH_REMATCH[8]}${BASH_REMATCH[7]},"
+        echo "0x${BASH_REMATCH[7]}${BASH_REMATCH[6]}${BASH_REMATCH[5]}${BASH_REMATCH[4]}, 0x${BASH_REMATCH[11]}${BASH_REMATCH[10]}${BASH_REMATCH[9]}${BASH_REMATCH[8]}, 0x${BASH_REMATCH[15]}${BASH_REMATCH[14]}${BASH_REMATCH[13]}${BASH_REMATCH[12]}, 0x${BASH_REMATCH[19]}${BASH_REMATCH[18]}${BASH_REMATCH[17]}${BASH_REMATCH[16]}, //${BASH_REMATCH[2]}"
     fi
 done < $1
 

@@ -57,12 +57,12 @@ clean_gdb:
 $(TARGETS) : % : $(OBJS) %.o 
 	$(CC) -o $@.axf $^ $(EXTRA_OBJS) -T$@-mem.ld $(LDFLAGS) $(LDLIBS)
 	$(SIZE) $@.axf
-#	$(OBJCOPY) $@.axf -O ihex $@.hex
+	$(OBJCOPY) -O ihex $@.axf $@.hex
+	./generate-hex ./$@.hex > ./$@.arr.hex
 	
 #BINARY := $(shell pwd)/$(BINARY)
 
 read : 
-	@[ ! -e "$(BINARY)" ] || (echo "$(BINARY) already exists, won't overwrite" && exit 1)
 	openocd \
         -f interface/stlink-v2.cfg \
         -f target/stm32w108_stlink.cfg \
@@ -70,7 +70,7 @@ read :
         -c "reset halt" \
         -c "sleep 100" \
         -c "wait_halt 2" \
-        -c "dump_image $(BINARY) 0x8010000 65536" \
+        -c "dump_image test.dump 0x8005000 45056" \
         -c "reset halt" \
         -c "shutdown"
 
@@ -133,10 +133,6 @@ gdb_master: $(BINARY)
         --eval-command "target remote localhost:3333" \
         --eval-command "load" \
         --eval-command "monitor reset halt"
-        
-hex: $(BINARY)
-	hexdump -v -s 0x5000 -n 1024 $(BINARY_APPLICATION) > $(ARCH)appImage.hex
-	./generate-hex ./$(ARCH)appImage.hex > ./$(ARCH)appImage-ww.hex 
 	
 su: mrproper all program
 	
