@@ -55,7 +55,7 @@ void M2C_setNodeVersion(uint8_t version)
 void M2C_jumpToApplication()
 {
 	uint32_t* msp_address = (uint32_t*) APPLICATION_ADDRESS;
-	uint32_t* app_address = (uint32_t*) APPLICATION_ADDRESS + 4;
+	uint32_t* app_address = (uint32_t*)(APPLICATION_ADDRESS + 4);
 	pFunction Start = (pFunction)(*app_address);
 	__set_MSP(*msp_address);
     NVIC_SetVectorTable(NVIC_VectTab_FLASH, APPLICATION_OFFSET);
@@ -111,16 +111,22 @@ void M2C_radioInit(RadioPacket* rPacket)
  * Envia el paquete pasado como parametro.
  * Si se especifican valores de waitingForTxRadioStatus y txStatus la llamada a este metodo
  * bloqueará la ejecución hasta asegurarse de que ha recivido el ACK correspondiente al envio del paquete,
- * reenviando el paquete cada vez que se reciba una respuesta no satisfactoria.
+ * reenviando el paquete cada vez que se reciba una respuesta no satisfactoria hasta agotar el numero
+ * de reintentos especificado en el parametro retryCount.
  *
  * @params:
  * - rPacket: Puntero al paquete que quiere ser transmitido
  * - waitingForTxRadioStatus: Puntero a la variable que determina si tenemos el resultado de la emision.
  * - StStatus: Puntero al estado de la emision.
+ * - retryCounter: numero de reintentos antes de desistir en el envio.
+ *
+ * @returns:
+ *  true si se ha ejecutado en modo de bloqueo y se ha conseguido enviar el paquete sin agotar el numero de reintentos.
+ *  false si se ha ejecutado sin bloqueo o bien si se han agotado los reintentos al enviar el paquete.
  */
-void M2C_sendPacket_Locking(RadioPacket* rPacket, __IO boolean* waitingForTxRadioStatus, __IO StStatus* txStatus)
+boolean M2C_sendPacket_Locking(RadioPacket* rPacket, __IO boolean* _waitingForTxRadioStatus, __IO StStatus* _txStatus, int16_t retryCounter)
 {
-	boolean lockExecution = waitingForTxRadioStatus && txStatus;
+	boolean lockExecution = _waitingForTxRadioStatus && _txStatus;
 
     // Enviamos el paquete
     do
@@ -131,20 +137,25 @@ void M2C_sendPacket_Locking(RadioPacket* rPacket, __IO boolean* waitingForTxRadi
     	// Esto es, cuando sabemos que el paquete esta listo para transmitir
     	do
     	{
-			*txStatus = 0;
-			*waitingForTxRadioStatus = TRUE;
+    		if (_txStatus)
+    			*_txStatus = 0;
+    		if (_waitingForTxRadioStatus)
+    			*_waitingForTxRadioStatus = TRUE;
+
 			radioStatus = ST_RadioTransmit ( (uint8_t*) rPacket);
 			WDG_ReloadCounter();
     	}
     	while(radioStatus != ST_SUCCESS);
 
         // Esperamos hasta terminar de transmitir
-        while (lockExecution && *waitingForTxRadioStatus);
+        while (lockExecution && *_waitingForTxRadioStatus);
 		{
 			WDG_ReloadCounter();
 		}
     }// Repetiremos este bucle hasta
-    while (lockExecution && *txStatus != ST_PHY_ACK_RECEIVED);
+    while (lockExecution && retryCounter-- > 0 && *_txStatus != ST_PHY_ACK_RECEIVED);
+
+    return lockExecution && retryCounter >= 0;
 }
 
 /**

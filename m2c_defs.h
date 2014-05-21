@@ -2,6 +2,7 @@
 #define __M2C_DEFS
 
 #include "stm32w108xx.h"
+#include "stm32w108xx_wdg.h"
 #include "gnu.h"
 #include "error.h"
 #include "micro-common.h"
@@ -55,6 +56,7 @@
  *  Indicador de que el paquete es el ultimo en un proceso.
  *  Por ahora solo es enviado por el master en el 3er byte del ultimo paquete de una transmision de FW
  */
+#define M2C_FIRST_PACKET_MARKER				0xF0
 #define M2C_LAST_PACKET_MARKER				0xFF
 
 // Estructura de paquete de radio
@@ -73,9 +75,13 @@ __IO typedef struct RadioPacket_ RadioPacket;
 typedef int (*pFunction)(void);
 
 // Definicion de delays unica
-#define M2C_DELAY_SHORT 	0x00FFFF
+#define M2C_DELAY_SHORT 	0x007FFF
 #define M2C_DELAY_LONG 		0x03FFFF
 #define M2C_DELAY_VLONG		0xFFFFFF
+
+// Definicion de numero de retrys
+#define M2C_RETRY_A_FEW    5
+#define M2C_RETRY_A_LOT    20
 
 // Funciones a exportar
 // Relacionadas con el bootloader
@@ -85,8 +91,8 @@ void M2C_jumpToBootloader(void);
 void M2C_jumpToApplication(void);
 // Relacionadas con la radio
 void M2C_radioInit(RadioPacket* rPacket);
-void M2C_sendPacket_Locking(RadioPacket* rPacket, __IO boolean* waitingForTxRadioStatus, __IO StStatus* txStatus);
-#define M2C_sendPacket(A) M2C_sendPacket_Locking(A, NULL, NULL)
+boolean M2C_sendPacket_Locking(RadioPacket* rPacket, __IO boolean* _waitingForTxRadioStatus, __IO StStatus* _txStatus, int16_t retryCounter);
+#define M2C_sendPacket(A) M2C_sendPacket_Locking(A, NULL, NULL, 0)
 // Genericas
 void M2C_initBoard(void);
 void M2C_Delay(__IO uint32_t nCount);
