@@ -18,6 +18,11 @@ __IO uint8_t bufferRx[128];				// Buffer donde se almacenan los paquetes recibid
 //__IO uint8_t bufferTx[128];				// Buffer donde se almacenan los datos para su posterior transmisión
 
 /**
+ * TIMERS
+ */
+__IO uint32_t nodeGetMasterFirmwareVersionTimer; // Timer para controlar cada cuanto pedimos el firmware al nodo master
+
+/**
  * Redefinimos el offset de la posicion de la tabla de los vectores de interrupcion.
  * Al estar en la aplicacion estamos en la seccion de memoria alta, y por tanto usamos la
  * tabla de vectores de interrupcion movida tanto como ocupe el bootloader.
@@ -33,6 +38,8 @@ void initBoard(void)
 
 	M2C_LEDOn (RLED);
 	M2C_LEDOff (GLED);
+
+	nodeGetMasterFirmwareVersionTimer = 0;
 }
 
 /*
@@ -142,9 +149,13 @@ int main(void)
 
 		WDG_ReloadCounter();
 
-		M2C_LEDToggle(GLED);
-		M2C_Delay(M2C_DELAY_VLONG);
-		//M2C_LEDBlink(RLED, 2);
-		nodeGetMasterFirmwareVersion();
+		if (nodeGetMasterFirmwareVersionTimer <= 0)
+		{
+			nodeGetMasterFirmwareVersion();
+			nodeGetMasterFirmwareVersionTimer = M2C_DELAY_VLONG;
+		}
+		else
+			nodeGetMasterFirmwareVersionTimer--;
+
 	}
 }

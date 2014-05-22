@@ -35,6 +35,11 @@ __IO uint8_t bufferRx[128];				// Buffer donde se almacenan los paquetes recibid
 //__IO uint8_t bufferTx[128];				// Buffer donde se almacenan los datos para su posterior transmisión
 
 /**
+ * TIMERS
+ */
+__IO uint32_t nodeGetMasterFirmwareTimer; // Timer para controlar cada cuanto pedimos el firmware al nodo master
+
+/**
  * Vacia la página asociada a la direccion address y escribe el
  * contenido del array data pasado como parametro en dicha pagina.
  *
@@ -69,7 +74,7 @@ void nodeIsReadyToGetNewFirm(void)
 	rf_tx_packet.len = M2C_RADIO_HEADER_SIZE + 1 + M2C_RADIO_TAIL_SIZE;
 	rf_tx_packet.seq++;
 
-	M2C_sendPacket_Locking(&rf_tx_packet, &waitingForTxRadioStatus, &txStatus);
+	M2C_sendPacket_Locking(&rf_tx_packet, &waitingForTxRadioStatus, &txStatus, M2C_RETRY_A_LOT);
 }
 
 /**
@@ -129,15 +134,22 @@ int main(void)
 		M2C_initBoard();
 		M2C_radioInit(&rf_tx_packet);
 		NVIC_SetVectorTable(NVIC_VectTab_FLASH, 0);
+		nodeGetMasterFirmwareTimer = 0;
 
 		M2C_LEDOn(GLED);
 		M2C_LEDOn(RLED);
 
-		// Pedimos de forma insitente al nodo maestro que nos envie el nuevo firmware.
-		nodeIsReadyToGetNewFirm();
-
 		while (!flashing_finished)
 		{
+			// Pedimos de forma insitente al nodo maestro que nos envie el nuevo firmware.
+			if (nodeGetMasterFirmwareTimer <= 0)
+			{
+				nodeIsReadyToGetNewFirm();
+				nodeGetMasterFirmwareTimer = M2C_DELAY_LONG;
+			}
+			else
+				nodeGetMasterFirmwareTimer--;
+
 			if (packetRecived)
 			{
 				RadioPacket* rPacket = (RadioPacket*) bufferRx;
@@ -146,9 +158,20 @@ int main(void)
 				{
 					case M2C_PACKET_TYPE_CONTAINS_FW:
 					{
+						// Si nos llega un paquete actualizamos el timer de espera para pedir fw
+						nodeGetMasterFirmwareTimer = M2C_DELAY_VLONG;
+
+						if (rPacket->data[3] == M2C_FIRST_PACKET_MARKER)
+						{
+							// Si es el primer paquete del firmware reiniciamos todas las variables del proceso
+							pageToFlashBufferIndex = 0;
+							page_index = 0;
+							flashing_finished = FALSE;
+						}
+
 						// La condicion esta dividida por 4 porque queremos trabajar con uint32, no uint8
 						uint16_t i;
-						for (i = 1; i < rPacket->data[1] / 4; i++)
+						for (i = 1; i <= rPacket->data[1] / 4; i++)
 						{
 							// Reconstruimos el uint32 a partir de 4 bytes
 							uint32_t wordToBuffer = rPacket->data[4*i + 0] << 24 | rPacket->data[4*i + 1] << 16 | rPacket->data[4*i + 2] << 8 | rPacket->data[4*i + 3];
@@ -156,7 +179,7 @@ int main(void)
 							pageToFlashBufferIndex++;
 
 							// Si tenemos el buffer lleno o es nuestro ultimo paquete
-							if (pageToFlashBufferIndex == PAGE_TO_FLASH_BUFFER_SIZE - 1 || rPacket->data[3] == M2C_LAST_PACKET_MARKER)
+							if (pageToFlashBufferIndex >= PAGE_TO_FLASH_BUFFER_SIZE || (rPacket->data[3] == M2C_LAST_PACKET_MARKER && i >= rPacket->data[1]))
 							{
 								// Escribimos la pagina en flash
 								writeFlashPage(APPLICATION_ADDRESS + page_index*FLASH_PAGE_SIZE, pageToFlashBuffer);
@@ -164,15 +187,20 @@ int main(void)
 								pageToFlashBufferIndex = 0;
 								// Incrementamos el indice de página
 								page_index++;
-							}
 
-							// Si era nuestro ultimo paquete de FW..
-							if (rPacket->data[3] == M2C_LAST_PACKET_MARKER)
-							{
-								// Borramos la flag de arranque en BL
-								M2C_setBootMode(BOOT_MODE_APP);
-								M2C_setNodeVersion(rPacket->data[3]);
-								flashing_finished = 1;
+								// Si era nuestro ultimo paquete de FW..
+								if (rPacket->data[3] == M2C_LAST_PACKET_MARKER)
+								{
+									// Borramos la flag de arranque en BL
+									M2C_setBootMode(BOOT_MODE_APP);
+									M2C_setNodeVersion(rPacket->data[2]);
+									flashing_finished = TRUE;
+								}
+
+								// Reiniciamos el buffer
+								uint16_t k;
+								for (k=0; k<sizeof(pageToFlashBuffer); k++)
+									pageToFlashBuffer[k] = 0;
 							}
 						}
 						break;
