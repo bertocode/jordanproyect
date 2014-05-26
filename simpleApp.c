@@ -13,8 +13,8 @@ RadioPacket rf_tx_packet;				// Instancia unica de la estructura de paquetes a e
 __IO StStatus txStatus;					// Resultado de la emision (ACK recibido, ACK no recibido...)
 __IO boolean waitingForTxRadioStatus;	// Flag para indicar si estamos esperando a que txStatus esté disponible
 
-boolean packetRecived;					//Flag para indicar que hay un paquete recibido pendiente de ser procesado en el bucle main
-__IO uint8_t bufferRx[128];				// Buffer donde se almacenan los paquetes recibidos para su posterior procesado
+boolean packetRecived;						//Flag para indicar que hay un paquete recibido pendiente de ser procesado en el bucle main
+__IO uint8_t bufferRx[M2C_RADIO_RX_BUFFER];	// Buffer donde se almacenan los paquetes recibidos para su posterior procesado
 //__IO uint8_t bufferTx[128];				// Buffer donde se almacenan los datos para su posterior transmisión
 
 /**

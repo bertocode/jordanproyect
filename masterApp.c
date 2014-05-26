@@ -16,9 +16,9 @@ RadioPacket rf_tx_packet;				// Instancia unica de la estructura de paquetes a e
 __IO StStatus txStatus;					// Resultado de la emision (ACK recibido, ACK no recibido...)
 __IO boolean waitingForTxRadioStatus;	// Flag para indicar si estamos esperando a que txStatus esté disponible
 
-boolean packetRecived;					//Flag para indicar que hay un paquete recibido pendiente de ser procesado en el bucle main
-__IO uint8_t radioBufferRx[128];				// Buffer donde se almacenan los paquetes recibidos para su posterior procesado
-__IO uint8_t radioBufferTx[128];				// Buffer donde se almacenan los datos para su posterior transmisión
+boolean packetRecived;								//Flag para indicar que hay un paquete recibido pendiente de ser procesado en el bucle main
+__IO uint8_t radioBufferRx[M2C_RADIO_RX_BUFFER];	// Buffer donde se almacenan los paquetes recibidos para su posterior procesado
+__IO uint8_t radioBufferTx[M2C_RADIO_TX_BUFFER];	// Buffer donde se almacenan los datos para su posterior transmisión
 
 
 #define TXBUFFERSIZE   (countof(TxBuffer) - 1)
@@ -110,6 +110,12 @@ void masterSendNodeFirmwareVersion(uint16_t dest)
 	M2C_sendPacket_Locking(&rf_tx_packet, &waitingForTxRadioStatus, &txStatus, M2C_RETRY_A_LOT);
 }
 
+/**
+ * Envia la linea pasada como parametro a al nodo hijo dest.
+ *
+ * La función devuelve TRUE si se ha enviado correctamente. FALSE si se han
+ * agotado los reintentos de envio.
+ */
 int masterSendNodeHexFileLine(uint16_t dest, uint8_t line[])
 {
 	// Reiniciamos la longitud del paquete
@@ -144,6 +150,12 @@ int masterSendNodeHexFileLine(uint16_t dest, uint8_t line[])
 	return M2C_sendPacket_Locking(&rf_tx_packet, &waitingForTxRadioStatus, &txStatus, M2C_RETRY_A_LOT);
 }
 
+/**
+ * Pide una linea del archivo hex de firmware a través de la UART.
+ *
+ * Este metodo obtiene bien la primera linea o la siguiente a la enviada en
+ * la ultima llamada a este metodo en función del valor de TxBuffer.
+ */
 void masterSendNodeFirmware(uint16_t dest)
 {
 	// Preparamos el buffer de recepcion serie
@@ -227,7 +239,7 @@ int main(void)
 		    	default:
 		    		// No se que hacer con este paquete, despreciado.
 		    		packetRecived = FALSE;
-		    		 break;
+		    		break;
 		    }
 		}
 

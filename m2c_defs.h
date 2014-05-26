@@ -64,6 +64,7 @@ struct RadioPacket_ {
 	uint8_t data[M2C_RADIO_MAX_DATA_SIZE];
 };
 __IO typedef struct RadioPacket_ RadioPacket;
+
 // puntero a funcion
 typedef int (*pFunction)(void);
 
@@ -75,6 +76,10 @@ typedef int (*pFunction)(void);
 // Definicion de numero de retrys
 #define M2C_RETRY_A_FEW    5
 #define M2C_RETRY_A_LOT    20
+
+// Definicion de tamano de buffers de radio
+#define M2C_RADIO_RX_BUFFER 128
+#define M2C_RADIO_TX_BUFFER 128
 
 // Funciones a exportar
 // Relacionadas con el bootloader

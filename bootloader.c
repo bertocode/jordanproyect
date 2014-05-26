@@ -16,10 +16,6 @@
 /**
  * VARIABLES RELACIONADAS CON LA ESCRITURA EN FLASH
  **/
-#define PAGE_TO_FLASH_BUFFER_SIZE FLASH_PAGE_SIZE / 4	// Tamano de página en words (uint32_t)
-uint32_t pageToFlashBuffer[PAGE_TO_FLASH_BUFFER_SIZE];	// Buffer donde se guardan las paginas recibidas por radio para su posterior grabacion en flash
-__IO uint16_t pageToFlashBufferIndex = 0;				// Indice de llenado del buffer pageToFlashBuffer
-__IO uint16_t page_index             = 0;				// Indice de la ultima pagina escrita en flash
 __IO boolean flashing_finished       = FALSE;			// Flag para indicar si se ha terminado de grabar en flash
 
 /**
@@ -30,7 +26,7 @@ __IO StStatus txStatus;					// Resultado de la emision (ACK recibido, ACK no rec
 __IO boolean waitingForTxRadioStatus;	// Flag para indicar si estamos esperando a que txStatus esté disponible
 
 __IO boolean packetRecived;					//Flag para indicar que hay un paquete recibido pendiente de ser procesado en el bucle main
-__IO uint8_t radioBufferRx[128];		// Buffer donde se almacenan los paquetes recibidos para su posterior procesado
+__IO uint8_t radioBufferRx[M2C_RADIO_RX_BUFFER];			// Buffer donde se almacenan los paquetes recibidos para su posterior procesado
 // No se utiliza buffer de transmision en modo BL ya que solo se envian paquetes de beacon (cortos)
 //__IO uint8_t bufferTx[128];				// Buffer donde se almacenan los datos para su posterior transmisión
 
@@ -40,30 +36,6 @@ __IO uint8_t radioBufferRx[128];		// Buffer donde se almacenan los paquetes reci
 __IO uint32_t nodeGetMasterFirmwareTimer; // Timer para controlar cada cuanto pedimos el firmware al nodo master
 
 /**
- * Vacia la página asociada a la direccion address y escribe el
- * contenido del array data pasado como parametro en dicha pagina.
- *
- * El array data debe tener estrictamente FLASH_PAGE_SIZE/4 posiciones, tener
- * mas de estos hará que se ignoren; tener menos posiblemente provoque un
- * error o que se escriban datos no deseados.
- */
-void writeFlashPage(uint32_t address, uint32_t data[])
-{
-	FPEC_ClockCmd(ENABLE);
-	FLASH_Unlock();
-	FLASH_ClearFlag(FLASH_FLAG_BSY | FLASH_FLAG_EOP| FLASH_FLAG_PGERR | FLASH_FLAG_WRPRTERR);
-
-	FLASH_ErasePage(address);
-
-	uint16_t i;
-	for (i=0; i < FLASH_PAGE_SIZE/4; i++)
-		FLASH_ProgramWord(address + 4*i, data[i]);
-
-	FLASH_Lock();
-	FPEC_ClockCmd(DISABLE);
-}
-
-/*
  * Este metodo envia la petición de version de firmware al nodo padre. Esta llamada bloquea la ejecución
  * hasta haberse asegurado de que el paquete ha sido recibido por el nodo destino.
  *
@@ -143,12 +115,14 @@ int main(void)
 		M2C_LEDOn(GLED);
 		M2C_LEDOn(RLED);
 
+		// Activamos la escritura en memoria
 		FPEC_ClockCmd(ENABLE);
 		FLASH_Unlock();
 
 		uint16_t currentAddress;
 		uint32_t startAddress = 0;
 
+		// Borramos toda la zona de memoria de la aplicación
 		uint32_t pageToBeErased = APPLICATION_ADDRESS;
 		while(pageToBeErased < APPLICATION_END_ADDRESS)
 		{
@@ -158,7 +132,7 @@ int main(void)
 
 		while (!flashing_finished)
 		{
-			// Pedimos de forma insitente al nodo maestro que nos envie el nuevo firmware.
+			// Timeout para pedir el firmware al master si llevamos un rato sin recibir nada
 			if (nodeGetMasterFirmwareTimer <= 0)
 			{
 				nodeIsReadyToGetNewFirm(TRUE);
@@ -205,6 +179,8 @@ int main(void)
 								break;
 						}
 
+						// Marcamos aqui el paquete como procesado ya que no lo vamos a usar
+						// y marcarlo luego provoca errores en las llamadas de interrupcion
 						packetRecived = FALSE;
 
 						if (hexLine->type != END_OF_FILE_RECORD)
@@ -221,8 +197,11 @@ int main(void)
 			WDG_ReloadCounter();
 		}
 
+		// Volvemos a bloquear la flash. No es necesario pero si correcto.
 		FLASH_Lock();
 		FPEC_ClockCmd(DISABLE);
+
+		// Saltamos a la aplicación
 		M2C_jumpToApplication();
 		return 1; // Esto en realidad no hace falta, pero nos curamos en salud
 	}
