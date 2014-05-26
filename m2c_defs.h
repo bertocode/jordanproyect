@@ -52,13 +52,6 @@
 #define M2C_PACKET_TYPE_WAITING_FOR_FW 		0xFA
 #define M2C_PACKET_TYPE_CONTAINS_FW 		M2C_PACKET_TYPE_WAITING_FOR_FW
 
-/*
- *  Indicador de que el paquete es el ultimo en un proceso.
- *  Por ahora solo es enviado por el master en el 3er byte del ultimo paquete de una transmision de FW
- */
-#define M2C_FIRST_PACKET_MARKER				0xF0
-#define M2C_LAST_PACKET_MARKER				0xFF
-
 // Estructura de paquete de radio
 struct RadioPacket_ {
 	uint8_t len;
