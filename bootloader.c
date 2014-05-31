@@ -122,14 +122,6 @@ int main(void)
 		uint16_t currentAddress;
 		uint32_t startAddress = 0;
 
-		// Borramos toda la zona de memoria de la aplicación
-		uint32_t pageToBeErased = APPLICATION_ADDRESS;
-		while(pageToBeErased < APPLICATION_END_ADDRESS)
-		{
-			FLASH_ErasePage(pageToBeErased);
-			pageToBeErased += FLASH_PAGE_SIZE;
-		}
-
 		while (!flashing_finished)
 		{
 			// Timeout para pedir el firmware al master si llevamos un rato sin recibir nada
@@ -144,7 +136,7 @@ int main(void)
 			if (packetRecived)
 			{
 				// Si nos llega un paquete actualizamos el timer de espera para pedir fw
-				nodeGetMasterFirmwareTimer = M2C_DELAY_VLONG;
+				nodeGetMasterFirmwareTimer = M2C_DELAY_LONG;
 
 				RadioPacket* rPacket = (RadioPacket*) radioBufferRx;
 
@@ -160,10 +152,16 @@ int main(void)
 								currentAddress = hexLine->offset;
 
 								uint16_t* data16 = (uint16_t*) hexLine->data;
+								uint32_t targetAddress = currentAddress + startAddress;
+
+								// Borramos la página si estamos en el inicio de una
+								if ((targetAddress >= APPLICATION_ADDRESS && targetAddress < FLASH_END_ADDR)
+										&& targetAddress % FLASH_PAGE_SIZE == 0)
+									FLASH_ErasePage(targetAddress);
 
 								uint16_t i;
 								for(i=0; i < ( hexLine->numBytes >> 1 ); i++)
-									FLASH_ProgramHalfWord(currentAddress + startAddress + i*2, data16[i]);
+									FLASH_ProgramHalfWord(targetAddress + i*2, data16[i]);
 
 								currentAddress += (uint16_t) hexLine->numBytes;
 								break;
