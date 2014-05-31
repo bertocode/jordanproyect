@@ -32,6 +32,9 @@ SC_DMA_InitTypeDef SC_DMA_InitStructure;
 uint8_t TxBuffer[] = { 0xFF };
 uint8_t serialRxBuffer[SERIAL_RX_BUFFER_LENGTH];
 
+// Timers -----
+uint32_t timerLedBlink;
+
 void initBoard(void)
 {
 	M2C_initBoard();
@@ -243,7 +246,12 @@ int main(void)
 		    }
 		}
 
-		M2C_LEDToggle(RLED);
-		M2C_Delay(M2C_DELAY_LONG);
+		if (timerLedBlink <= 0)
+		{
+			M2C_LEDToggle(RLED);
+			timerLedBlink = M2C_DELAY_LONG;
+		}
+		else
+			timerLedBlink--;
 	}
 }
