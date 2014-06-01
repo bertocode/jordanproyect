@@ -133,7 +133,12 @@ gdb_master: $(BINARY)
         --eval-command "target remote localhost:3333" \
         --eval-command "load" \
         --eval-command "monitor reset halt"
-	
+
+up_pi:
+	mv cortex-m3-simpleApp.hex image.hex
+	sshpass -p 'raspberry' scp image.hex pi-main.c pi@raspberrypi:~/sdg2/uart/
+	mv image.hex cortex-m3-simpleApp.hex
+
 su: mrproper all program
 	
 #-------------- No changes below this line, please ---------------------------
