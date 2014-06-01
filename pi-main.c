@@ -24,6 +24,9 @@ typedef struct {
 
 uint32_t stringToHex(char* s,uint8_t lenght);
 uint8_t parse_line(char* line, hex_line* data);
+void print_hex_line(hex_line l);
+void print_error(void);
+void print_ok(void);
 
 int main()
 {
@@ -31,18 +34,20 @@ int main()
 
 	int uart0_filestream = -1;
 
-	printf("Configurando UART\n");
+	printf("Configurando UART");
 	// Abrimos la UART en modo lectura/escritura/no bloqueante
 	uart0_filestream = open("/dev/ttyAMA0", O_RDWR | O_NOCTTY | O_NDELAY);
 	if (uart0_filestream == -1)
 	{
+		print_error();
 		// Error, no pudimos abrir el puerto serie
 		printf(ANSI_COLOR_RED);
 		printf("ERROR - No se pudo abrir la UART\n");
 		printf(ANSI_COLOR_RESET);
 		return 1;
 	}
-	
+	print_ok();
+
 	// Configuración de la UART: 115200 baudios, 8bits, 1bit de parada, paridad impar
 	struct termios options;
 	tcgetattr(uart0_filestream, &options);
@@ -53,22 +58,21 @@ int main()
 	tcflush(uart0_filestream, TCIFLUSH);
 	tcsetattr(uart0_filestream, TCSANOW, &options);
 
-	printf("Comprobando archivo de imagen\n");
-
+	printf("Comprobando archivo de imagen");
 	// Abrimos el archivo de imagen
 	static const char filename[] = "image.hex";
 	FILE *file = fopen ( filename, "r" );
 
 	if ( file == NULL )
 	{
+		print_error();
 		printf(ANSI_COLOR_RED);
 		printf("ERROR - No se pudo abrir el archivo de imagen\n");
 		perror ( filename );
 		printf(ANSI_COLOR_RESET);
 		return 1;
 	}
-
-	// TODO: Comprobar coherencia del archivo hex
+	print_ok();
 
 	/**
 	 * Indice de la última pagina que enviamos. Se usa para evitar hacer rewinds cada vez que nos piden una.
@@ -80,6 +84,38 @@ int main()
 	unsigned char rx_buffer[256];
 	int rx_length = 0;
 
+	// Comprobamos que el binario sea correcto
+	while ( fgets ( line, 50 * sizeof(char), file ) != NULL )
+	{
+		if(!parse_line(line, &hexLine))
+		{
+			printf(ANSI_COLOR_RED);
+			printf("ERROR - Encontrada linea no valida en el archivo de imagen\n");
+			printf(ANSI_COLOR_RESET);
+			return 1;
+		}
+
+		uint16_t sum = hexLine.numBytes;
+		sum += (uint8_t)hexLine.offset;
+		sum += (uint8_t)((hexLine.offset) >> 8);
+		sum += hexLine.type;
+		for (uint8_t i=0; i<hexLine.numBytes; i++)
+			sum += hexLine.data[i];
+
+		uint8_t calculated_checksum = 0x100 - (0xFF & sum);
+		if (calculated_checksum != hexLine.checksum)
+		{
+			printf(ANSI_COLOR_RED);
+			printf("ERROR - El checksum no concuerda para la linea: \n");
+			printf(ANSI_COLOR_RESET);
+			print_hex_line(hexLine);
+			printf("El checksum obtenido es %X y el esperado era %02X\n", calculated_checksum, hexLine.checksum);
+			return 1;
+		}
+	}
+	rewind(file);
+
+	printf("Esperando datos desde la UART\n");
 	while (1)
 	{
 		rx_length = 0;
@@ -89,7 +125,8 @@ int main()
 
 		// Datos recibidos
 		rx_buffer[rx_length] = '\0';
-		printf("%i bytes read : 0x%X\n", rx_length, rx_buffer[0]);
+		//printf("%i bytes read : 0x%X\n", rx_length, rx_buffer[0]);
+		printf("0x%X:", rx_buffer[0]);
 
 		// Seleccionamos accion en función del primer dato del buffer
 		switch (rx_buffer[0])
@@ -125,16 +162,7 @@ int main()
 				}
 
 				printf("%s:%u", filename, line_index);
-				printf(ANSI_COLOR_YELLOW ":" ANSI_COLOR_RESET);
-				printf(ANSI_COLOR_GREEN "%02X" ANSI_COLOR_RESET, hexLine.numBytes);
-				printf(ANSI_COLOR_BLUE "%04X" ANSI_COLOR_RESET, hexLine.offset);
-				printf(ANSI_COLOR_RED "%02X" ANSI_COLOR_RESET, hexLine.type);
-
-				for (uint8_t i=0; i<0x10; i++)
-					printf(ANSI_COLOR_CYAN "%02X" ANSI_COLOR_RESET, hexLine.data[i]);
-
-				printf(ANSI_COLOR_MAGENTA "%02X" ANSI_COLOR_RESET "\n", hexLine.checksum);
-
+				print_hex_line(hexLine);
 				break;
 			}
 			case 0xB0: // Peticion de version
@@ -197,15 +225,7 @@ int main()
 							printf(ANSI_COLOR_RESET);
 						}
 						else // Se ha enviado correctamente, mostramos la linea enviada
-						{
-							printf(ANSI_COLOR_YELLOW ":" ANSI_COLOR_RESET);
-							printf(ANSI_COLOR_GREEN "%02X" ANSI_COLOR_RESET, hexLine.numBytes);
-							printf(ANSI_COLOR_BLUE "%04X" ANSI_COLOR_RESET, hexLine.offset);
-							printf(ANSI_COLOR_RED "%02X" ANSI_COLOR_RESET, hexLine.type);
-							for (uint8_t i=0; i<0x10; i++)
-								printf(ANSI_COLOR_CYAN "%02X" ANSI_COLOR_RESET, hexLine.data[i]);
-							printf(ANSI_COLOR_MAGENTA "%02X" ANSI_COLOR_RESET "\n", hexLine.checksum);
-						}
+							print_hex_line(hexLine);
 					}
 					else
 					{
@@ -287,4 +307,25 @@ uint32_t stringToHex(char* s,uint8_t lenght)
 	}
 
 	return num;
+}
+
+void print_hex_line(hex_line l)
+{
+	printf(ANSI_COLOR_YELLOW ":" ANSI_COLOR_RESET);
+	printf(ANSI_COLOR_GREEN "%02X" ANSI_COLOR_RESET, l.numBytes);
+	printf(ANSI_COLOR_BLUE "%04X" ANSI_COLOR_RESET, l.offset);
+	printf(ANSI_COLOR_RED "%02X" ANSI_COLOR_RESET, l.type);
+	for (uint8_t i=0; i<l.numBytes; i++)
+		printf(ANSI_COLOR_CYAN "%02X" ANSI_COLOR_RESET, l.data[i]);
+	printf(ANSI_COLOR_MAGENTA "%02X" ANSI_COLOR_RESET "\n", l.checksum);
+}
+
+void print_ok()
+{
+	printf(ANSI_COLOR_GREEN " OK\n" ANSI_COLOR_RESET);
+}
+
+void print_error()
+{
+	printf(ANSI_COLOR_GREEN " ERROR\n" ANSI_COLOR_RESET);
 }
