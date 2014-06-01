@@ -56,7 +56,7 @@ int main()
 	printf("Comprobando archivo de imagen\n");
 
 	// Abrimos el archivo de imagen
-	static const char filename[] = "main.hex";
+	static const char filename[] = "image.hex";
 	FILE *file = fopen ( filename, "r" );
 
 	if ( file == NULL )
@@ -97,7 +97,7 @@ int main()
 			case 0xA0: // Peticion de linea del HexFile
 			{
 				// Obtenemos un uint32 a partir de los uint8 de entrada
-				uint32_t line_index = (uint32_t)rxBuffer[1]; // TODO: Comprobar
+				uint32_t line_index = (uint32_t)rx_buffer[1]; // TODO: Comprobar
 
 				// Recolocamos el puntero al fichero en función de la linea que nos piden
 
