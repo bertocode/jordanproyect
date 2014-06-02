@@ -34,6 +34,18 @@ int main()
 
 	int uart0_filestream = -1;
 
+	 // Indice de la última pagina que enviamos. Se usa para evitar hacer rewinds cada vez que nos piden una.
+	uint32_t last_line_index = 0;
+
+	// Buffer de lectura de archivo
+	char* line = (char*) malloc(50 * sizeof(char));
+	// Struct para almacenar las lineas ihex parseadas
+	hex_line hexLine;
+	// Buffer de lectura de la UART
+	unsigned char rx_buffer[256];
+	// Datos leidos de la UART
+	int rx_length = 0;
+
 	printf("Configurando UART");
 	// Abrimos la UART en modo lectura/escritura/no bloqueante
 	uart0_filestream = open("/dev/ttyAMA0", O_RDWR | O_NOCTTY | O_NDELAY);
@@ -58,6 +70,41 @@ int main()
 	tcflush(uart0_filestream, TCIFLUSH);
 	tcsetattr(uart0_filestream, TCSANOW, &options);
 
+	uint32_t version;
+	printf("Comprobando archivo de version");
+	// Abrimos el archivo de imagen
+	static const char verfilename[] = "image.ver";
+	FILE *verfile = fopen ( verfilename, "r" );
+
+	if ( verfile == NULL )
+	{
+		print_error();
+		printf(ANSI_COLOR_RED);
+		printf("ERROR - No se pudo abrir el archivo de version\n");
+		perror ( verfilename );
+		printf(ANSI_COLOR_RESET);
+		return 1;
+	}
+	else
+	{
+		if (fgets ( line, 50 * sizeof(char), verfile ) != NULL) // Esto deberia cumplirse siempre
+		{
+			version = atoi(line);
+			printf(". v%u", version);
+		}
+		else
+		{
+			print_error();
+			printf(ANSI_COLOR_RED);
+			printf("ERROR - Archivo de version no valido\n");
+			printf(ANSI_COLOR_RESET);
+			return 1;
+		}
+		fclose(verfile);
+	}
+	print_ok();
+
+
 	printf("Comprobando archivo de imagen");
 	// Abrimos el archivo de imagen
 	static const char filename[] = "image.hex";
@@ -73,16 +120,6 @@ int main()
 		return 1;
 	}
 	print_ok();
-
-	/**
-	 * Indice de la última pagina que enviamos. Se usa para evitar hacer rewinds cada vez que nos piden una.
-	 */
-	uint32_t last_line_index = 0;
-
-	char* line = (char*) malloc(50 * sizeof(char));
-	hex_line hexLine;
-	unsigned char rx_buffer[256];
-	int rx_length = 0;
 
 	// Comprobamos que el binario sea correcto
 	while ( fgets ( line, 50 * sizeof(char), file ) != NULL )
@@ -193,36 +230,16 @@ int main()
 			}
 			case 0xB0: // Peticion de version
 			{
-				// Nos movemos al principio del archivo
-				rewind(file);
-				last_line_index = 0;
+				int count = write(uart0_filestream, &version, sizeof(version));
 
-				if (fgets ( line, 50 * sizeof(char), file ) != NULL) // Esto deberia cumplirse siempre ya que acabamos de hacer rewind
+				if (count < 0) // No se ha enviado bien, mostramos un error
 				{
-					if(*line != '#')
-					{
-						printf(ANSI_COLOR_RED);
-						printf("ERROR - No se pudo obtener la version del archivo de firmware\n");
-						printf(ANSI_COLOR_RESET);
-					}
-
-					// Nos sltamos todos los primeros caracteres que no sean numeros
-					while (*line < '0' || *line > '9')
-						line++;
-
-					uint32_t version = atoi(line);
-					int count = write(uart0_filestream, &version, sizeof(version));
-					{
-						if (count < 0) // No se ha enviado bien, mostramos un error
-						{
-							printf(ANSI_COLOR_RED);
-							printf("ERROR - No se pudo escribir en la UART durante el envio de version\n");
-							printf(ANSI_COLOR_RESET);
-						}
-						else // Se ha enviado correctamente, mostramos la linea enviada
-							printf (ANSI_COLOR_BLUE "Version de archivo" ANSI_COLOR_RESET "%u\n", version);
-					}
+					printf(ANSI_COLOR_RED);
+					printf("ERROR - No se pudo escribir en la UART durante el envio de identificador de version\n");
+					printf(ANSI_COLOR_RESET);
 				}
+				else // Se ha enviado correctamente, mostramos la linea enviada
+					printf("Version enviada: %u", version);
 
 				break;
 			}
