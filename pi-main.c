@@ -230,7 +230,8 @@ int main()
 			}
 			case 0xB0: // Peticion de version
 			{
-				int count = write(uart0_filestream, &version, sizeof(version));
+				// Escribimos sizeof(hexLine) bytes porque es lo que el buffer DMA del nodo espera
+				int count = write(uart0_filestream, &version, sizeof(hexLine));
 
 				if (count < 0) // No se ha enviado bien, mostramos un error
 				{
@@ -239,7 +240,7 @@ int main()
 					printf(ANSI_COLOR_RESET);
 				}
 				else // Se ha enviado correctamente, mostramos la linea enviada
-					printf("Version enviada: %u", version);
+					printf("Version enviada: v%u\n", version);
 
 				break;
 			}
