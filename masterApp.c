@@ -21,15 +21,12 @@ __IO uint8_t radioBufferRx[M2C_RADIO_RX_BUFFER];	// Buffer donde se almacenan lo
 __IO uint8_t radioBufferTx[M2C_RADIO_TX_BUFFER];	// Buffer donde se almacenan los datos para su posterior transmisión
 
 
-#define TXBUFFERSIZE   (countof(TxBuffer) - 1)
-/* Private macro -------------------------------------------------------------*/
-#define countof(a)   (sizeof(a) / sizeof(*(a)))
-
 UART_InitTypeDef UART_InitStructure;
 SC_DMA_InitTypeDef SC_DMA_InitStructure;
 
 #define SERIAL_RX_BUFFER_LENGTH 22
-uint8_t TxBuffer[] = { 0xFF };
+#define SERIAL_TX_BUFFER_LENGTH 5
+uint8_t serialTxBuffer[SERIAL_TX_BUFFER_LENGTH];
 uint8_t serialRxBuffer[SERIAL_RX_BUFFER_LENGTH];
 
 // Timers -----
@@ -81,8 +78,8 @@ void initBoard(void)
 	/* Reset DMA Channel Tx */
 	SC_DMA_ChannelReset(SC1_DMA, DMA_ChannelReset_Tx);
 	/* SC1 DMA channel Tx config */
-	SC_DMA_InitStructure.DMA_BeginAddrA = (uint32_t)TxBuffer;
-	SC_DMA_InitStructure.DMA_EndAddrA = (uint32_t)(TxBuffer + TXBUFFERSIZE);
+	SC_DMA_InitStructure.DMA_BeginAddrA = (uint32_t)serialTxBuffer;
+	SC_DMA_InitStructure.DMA_EndAddrA = (uint32_t)(serialTxBuffer + SERIAL_TX_BUFFER_LENGTH - 1);
 	SC_DMA_Init(SC1_DMA_ChannelTx, &SC_DMA_InitStructure);
 
 	/* Reset DMA Channel Rx */
@@ -156,8 +153,7 @@ int masterSendNodeHexFileLine(uint16_t dest, uint8_t line[])
 /**
  * Pide una linea del archivo hex de firmware a través de la UART.
  *
- * Este metodo obtiene bien la primera linea o la siguiente a la enviada en
- * la ultima llamada a este metodo en función del valor de TxBuffer.
+ * Este metodo obtiene la linea indicada por el numero pasado en el serialTxBuffer
  */
 void masterSendNodeFirmware(uint16_t dest)
 {
@@ -231,10 +227,12 @@ int main(void)
 		    		masterSendNodeFirmwareVersion(rPacket->src_short_addr);
 		    		break;
 		    	case M2C_PACKET_TYPE_WAITING_FOR_FW:
-		    		if (rPacket->data[1] == 0x00)
-		    			TxBuffer[0] = 0xFF;
-		    		else
-		    			TxBuffer[0] = 0xF0;
+		    		serialTxBuffer[0] = 0xA0;
+
+		    		serialTxBuffer[1] = rPacket->data[2];
+		    		serialTxBuffer[2] = rPacket->data[3];
+		    		serialTxBuffer[3] = rPacket->data[4];
+		    		serialTxBuffer[4] = rPacket->data[5];
 
 		    		packetRecived = FALSE;
 		    		masterSendNodeFirmware(rPacket->src_short_addr);
@@ -253,5 +251,7 @@ int main(void)
 		}
 		else
 			timerLedBlink--;
+
+		WDG_ReloadCounter();
 	}
 }

@@ -29,6 +29,7 @@ __IO boolean packetRecived;					//Flag para indicar que hay un paquete recibido 
 __IO uint8_t radioBufferRx[M2C_RADIO_RX_BUFFER];			// Buffer donde se almacenan los paquetes recibidos para su posterior procesado
 // No se utiliza buffer de transmision en modo BL ya que solo se envian paquetes de beacon (cortos)
 //__IO uint8_t bufferTx[128];				// Buffer donde se almacenan los datos para su posterior transmisión
+__IO uint32_t line_index;
 
 /**
  * TIMERS
@@ -47,7 +48,12 @@ void nodeIsReadyToGetNewFirm(boolean first)
     rf_tx_packet.data[0] = M2C_PACKET_TYPE_WAITING_FOR_FW;
     rf_tx_packet.data[1] = first ? 0x00 : 0xFF;
 
-	rf_tx_packet.len = M2C_RADIO_HEADER_SIZE + 1 + M2C_RADIO_TAIL_SIZE;
+    rf_tx_packet.data[2] = (0x000000FF & line_index);
+    rf_tx_packet.data[3] = (0x0000FF00 & line_index) >> 8;
+    rf_tx_packet.data[4] = (0x00FF0000 & line_index) >> 16;
+    rf_tx_packet.data[5] = (0xFF000000 & line_index) >> 24;
+
+	rf_tx_packet.len = M2C_RADIO_HEADER_SIZE + 6 + M2C_RADIO_TAIL_SIZE;
 	rf_tx_packet.seq++;
 
 	M2C_sendPacket_Locking(&rf_tx_packet, &waitingForTxRadioStatus, &txStatus, M2C_RETRY_A_LOT);
@@ -121,6 +127,7 @@ int main(void)
 
 		uint16_t currentAddress;
 		uint32_t startAddress = 0;
+		line_index = 0;
 
 		while (!flashing_finished)
 		{
@@ -176,6 +183,9 @@ int main(void)
 							default:
 								break;
 						}
+
+						// Aumentamos el contador de linea de página para la siguiente vez
+						line_index++;
 
 						// Marcamos aqui el paquete como procesado ya que no lo vamos a usar
 						// y marcarlo luego provoca errores en las llamadas de interrupcion
