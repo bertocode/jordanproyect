@@ -173,7 +173,7 @@ int main(void)
 								currentAddress += (uint16_t) hexLine->numBytes;
 								break;
 							case END_OF_FILE_RECORD:
-								M2C_setNodeVersion(rPacket->data[1]);
+								M2C_setNodeVersion((uint16_t*)&rPacket->data[1]);
 								M2C_setBootMode(BOOT_MODE_APP);
 								flashing_finished = 1;
 								break;

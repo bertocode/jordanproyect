@@ -25,9 +25,9 @@ void M2C_setBootMode(uint8_t bootMode)
  * Al cambiar este valor toda la pagina asociada a la direccion de memoria CONFIG_MASK_ADDRESS se pierde y solo se
  * mantiene el valor estrictamente en CONFIG_MASK_ADDRESS, que es precisamente la mascara de configuracion para arranque.
  */
-void M2C_setNodeVersion(uint8_t version)
+void M2C_setNodeVersion(uint16_t* version)
 {
-	uint32_t newConfigValue = BOOT_MODE << 24 | version;
+	uint32_t newConfigValue = BOOT_MODE << 24 | *version;
 
 	FPEC_ClockCmd(ENABLE);
 

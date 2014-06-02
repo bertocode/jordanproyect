@@ -84,7 +84,7 @@ typedef int (*pFunction)(void);
 // Funciones a exportar
 // Relacionadas con el bootloader
 void M2C_setBootMode(uint8_t bootMode);
-void M2C_setNodeVersion(uint8_t version);
+void M2C_setNodeVersion(uint16_t* version);
 void M2C_jumpToBootloader(void);
 void M2C_jumpToApplication(void);
 // Relacionadas con la radio
