@@ -126,7 +126,7 @@ int main()
 		// Datos recibidos
 		rx_buffer[rx_length] = '\0';
 		//printf("%i bytes read : 0x%X\n", rx_length, rx_buffer[0]);
-		printf("0x%X:", rx_buffer[0]);
+		printf("0x%X: ", rx_buffer[0]);
 
 		// Seleccionamos accion en función del primer dato del buffer
 		switch (rx_buffer[0])
@@ -134,24 +134,28 @@ int main()
 			case 0xA0: // Peticion de linea del HexFile
 			{
 				// Obtenemos un uint32 a partir de los uint8 de entrada
-				uint32_t line_index = (uint32_t)rx_buffer[1]; // TODO: Comprobar
+				// El +1 es porque line index es 0-based mientras que last_line_index es 1-based
+				uint32_t line_index = (uint32_t)rx_buffer[1] + 1; // TODO: Comprobar
 
 				// Recolocamos el puntero al fichero en función de la linea que nos piden
-
-				// El +1 es porque line index es 0-based mientras que last_line_index es 1-based
-				if ((line_index + 1) - last_line_index > 0) // Nos piden una linea posterior a la ultima qe leimos
+				if ((int32_t)(line_index - last_line_index) > 0) // Nos piden una linea posterior a la ultima que leimos
 				{
-					for (uint32_t i = (line_index + 1) - last_line_index; i > 0; i--)
+					for (uint32_t i = line_index - last_line_index; i > 0; i--)
 						fgets ( line, 50 * sizeof(char), file );
+
 				}
 				else // Nos piden una anterior
 				{
+					printf(ANSI_COLOR_MAGENTA);
 					rewind(file); // Reiniciamos puntero
 
 					// Avanzamos tantas lineas como nos piden
-					for (uint32_t i = (line_index + 1); i > 0; i--) // El +1 es porque line index es 0-based
+					for (uint32_t i = line_index; i > 0; i--)
 						fgets ( line, 50 * sizeof(char), file );
 				}
+
+				// Actualizamos el contador de ultima linea pedida
+				last_line_index = line_index;
 
 				if(!parse_line(line, &hexLine))
 				{
@@ -161,8 +165,30 @@ int main()
 					break;
 				}
 
-				printf("%s:%u", filename, line_index);
-				print_hex_line(hexLine);
+				printf("%s:%u ", filename, line_index);
+				printf(ANSI_COLOR_RESET);
+
+				if (uart0_filestream != -1)
+				{
+					int count = write(uart0_filestream, &hexLine, sizeof(hexLine));
+
+					if (count < 0) // No se ha enviado bien, mostramos un error
+					{
+						printf(ANSI_COLOR_RED);
+						printf("ERROR - No se pudo escribir en la UART durante el envio de una linea\n");
+						printf(ANSI_COLOR_RESET);
+					}
+					else // Se ha enviado correctamente, mostramos la linea enviada
+						print_hex_line(hexLine);
+				}
+				else
+				{
+					// Error, no pudimos abrir el puerto serie
+					printf(ANSI_COLOR_RED);
+					printf("ERROR - No se pudo acceder a la UART durante el envio de una linea\n");
+					printf(ANSI_COLOR_RESET);
+					return 1;
+				}
 				break;
 			}
 			case 0xB0: // Peticion de version
