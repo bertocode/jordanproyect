@@ -135,7 +135,7 @@ int main()
 			{
 				// Obtenemos un uint32 a partir de los uint8 de entrada
 				// El +1 es porque line index es 0-based mientras que last_line_index es 1-based
-				uint32_t line_index = (uint32_t)rx_buffer[1] + 1; // TODO: Comprobar
+				uint32_t line_index = *((uint32_t*)&rx_buffer[1]) + 1;
 
 				// Recolocamos el puntero al fichero en función de la linea que nos piden
 				if ((int32_t)(line_index - last_line_index) > 0) // Nos piden una linea posterior a la ultima que leimos
@@ -165,7 +165,7 @@ int main()
 					break;
 				}
 
-				printf("%s:%u ", filename, line_index);
+				printf("%s:%04u ", filename, line_index);
 				printf(ANSI_COLOR_RESET);
 
 				if (uart0_filestream != -1)

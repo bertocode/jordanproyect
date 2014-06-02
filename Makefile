@@ -134,7 +134,7 @@ gdb_master: $(BINARY)
         --eval-command "load" \
         --eval-command "monitor reset halt"
 
-up_pi:
+pi:
 	mv cortex-m3-simpleApp.hex image.hex
 	sshpass -p 'raspberry' scp image.hex pi-main.c pi@raspberrypi:~/sdg2/uart/
 	mv image.hex cortex-m3-simpleApp.hex
