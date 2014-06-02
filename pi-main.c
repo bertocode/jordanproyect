@@ -282,6 +282,9 @@ int main()
 				}
 				break;
 			}
+			default:
+				printf("\n");
+				break;
 		}
 
 	}
