@@ -29,6 +29,8 @@ SC_DMA_InitTypeDef SC_DMA_InitStructure;
 uint8_t serialTxBuffer[SERIAL_TX_BUFFER_LENGTH];
 uint8_t serialRxBuffer[SERIAL_RX_BUFFER_LENGTH];
 
+uint16_t version;
+
 // Timers -----
 uint32_t timerLedBlink;
 
@@ -125,10 +127,10 @@ int masterSendNodeHexFileLine(uint16_t dest, uint8_t line[])
     rf_tx_packet.data[0] = M2C_PACKET_TYPE_CONTAINS_FW;
 
     // Anadimos la version actual al paquete
-    rf_tx_packet.data[1] = USER_NODE_VERSION;
+    rf_tx_packet.data[1] = (0x00FF & version);
+    rf_tx_packet.data[2] = (0xFF00 & version) >> 8;
 
     // Slots de la cabecera no usados
-    rf_tx_packet.data[2] = 0x00;
     rf_tx_packet.data[3] = 0x00;
 
     size += 4; // Longitud de nuestra cabecera
@@ -173,6 +175,31 @@ void masterSendNodeFirmware(uint16_t dest)
 }
 
 /**
+ * Obtiene la version de firmware disponible pidiendolo por la UART.
+ *
+ * Esta version será guardad y se utilizará como valor de version para otras acciones
+ * hasta que se vuelva a invocar a esta funcion.
+ */
+uint16_t masterGetVersionFromUART(void)
+{
+	// Preparamos el buffer de recepcion serie
+	SC_DMA_ChannelLoadEnable(SC1_DMA, DMA_ChannelLoad_ARx);
+
+	// Escribimos en el puerto serie a la espera de que la Rpi nos conteste
+	serialTxBuffer[0] = 0xB0;
+	SC_DMA_ChannelLoadEnable(SC1_DMA, DMA_ChannelLoad_ATx);
+	while (SC_DMA_GetFlagStatus(SC1_DMA, DMA_FLAG_TXAACK) == SET)
+	  WDG_ReloadCounter();
+
+	// Esperamos a recibir el id de version
+	while (SC_DMA_GetFlagStatus(SC1_DMA, DMA_FLAG_RXAACK) == SET)
+	  WDG_ReloadCounter();
+
+	version = *((uint16_t*)&serialRxBuffer[0]);
+	return version;
+}
+
+/**
  * Callback de la libreria de radio de STM32.
  * Esta función se llama cada vez que un paquete termina de enviarse.
  * En nuestro caso solo almacenamos el valor del status y marcamos el flag
@@ -214,6 +241,8 @@ int main(void)
 {
 	initBoard();
 
+	masterGetVersionFromUART();
+
 	while (TRUE)
 	{
 		if (packetRecived)
@@ -224,6 +253,7 @@ int main(void)
 		    {
 		    	case M2C_PACKET_TYPE_FW_EXCHANGE_VERSION:
 		    		packetRecived = FALSE;
+		    		masterGetVersionFromUART();
 		    		masterSendNodeFirmwareVersion(rPacket->src_short_addr);
 		    		break;
 		    	case M2C_PACKET_TYPE_WAITING_FOR_FW:
