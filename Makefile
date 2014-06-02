@@ -18,7 +18,7 @@ GEN_DEPENDS = 0
 MAJOR_VERSION=1000
 REVISION=$(shell git rev-list HEAD | wc -l)
 VERSION=$$(( $(MAJOR_VERSION) + $(REVISION) ))
-
+NODE_CONFIG_MASK=$(shell printf "0xFF%06X" $(VERSION))
 CFLAGS+=-DVERSION="\"$(VERSION)\""
 CFLAGS += -Wno-aggressive-loop-optimizations
 
@@ -92,7 +92,7 @@ program_node program : $(BINARY_BOOTLOADER) $(BINARY_APPLICATION)
         -c "verify_image $(BINARY_BOOTLOADER)" \
         -c "sleep 100" \
         -c "flash erase_address pad 0x800FC00 1" \
-        -c "flash fillw 0x800FC00 0xFF000001 1" \
+        -c "flash fillw 0x800FC00 $(NODE_CONFIG_MASK) 1" \
         -c "reset" \
         -c "shutdown"
         
