@@ -117,7 +117,7 @@ int main(void)
 				{
 					// El nodo maestro nos ha enviado su version
 					// Comprobamos si es mayor que la nuestra.
-					uint16_t remoteVer = *((uint16_t*)&rPacket->data[1]) + 1;
+					uint16_t remoteVer = *((uint16_t*)&rPacket->data[1]);
 					if (USER_NODE_VERSION < remoteVer)
 					{
 						// Hacemos una senalizacion led de que vamos a entrar en modo bootloader
