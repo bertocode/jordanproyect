@@ -5,6 +5,7 @@
 #include <unistd.h>		//Used for UART
 #include <fcntl.h>			//Used for UART
 #include <termios.h>		//Used for UART
+#include <wiringPi.h>
 
 #define ANSI_COLOR_RED     "\x1b[31m"
 #define ANSI_COLOR_GREEN   "\x1b[32m"
@@ -13,6 +14,8 @@
 #define ANSI_COLOR_MAGENTA "\x1b[35m"
 #define ANSI_COLOR_CYAN    "\x1b[36m"
 #define ANSI_COLOR_RESET   "\x1b[0m"
+
+#define GPIO_RESET_PIN 1
 
 typedef struct {
 	uint8_t numBytes;
@@ -151,6 +154,23 @@ int main()
 		}
 	}
 	rewind(file);
+
+	printf("Reiniciando nodo maestro");
+	if (wiringPiSetup() == -1)
+	{
+		print_error();
+		printf(ANSI_COLOR_RED);
+		printf("ERROR - No se pudo configurar WiringPi\n");
+		printf(ANSI_COLOR_RESET);
+		return 1;
+	}
+	pinMode(GPIO_RESET_PIN, OUTPUT);
+	// Generamos un pulso en el pin de reset del procesador
+	digitalWrite(GPIO_RESET_PIN, 0);
+	delay(500);
+	digitalWrite(GPIO_RESET_PIN, 1);
+	delay(500);
+	print_ok();
 
 	printf("Esperando datos desde la UART\n");
 	while (1)
