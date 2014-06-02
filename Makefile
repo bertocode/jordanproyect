@@ -11,7 +11,14 @@ LDSCRIPT = -T$(top_srcdir)/stm32/lib/linker/sections-nokeep.ld
 
 GEN_DEPENDS = 0
 
-VERSION=$(shell git log . |head -1|awk '{print $$2}')
+#VERSION=$(shell git log . |head -1|awk '{print $$2}')
+# Esta generacion de versiones necesita una vuelta de tuerca mas,
+# ya que un commit relacionado con el Master o la RPi nos incrementaria la version
+# talvez deberiamos filtrar solo los que afecten a los archivos de la aplicacion estricamente?
+MAJOR_VERSION=1000
+REVISION=$(shell git rev-list HEAD | wc -l)
+VERSION=$$(( $(MAJOR_VERSION) + $(REVISION) ))
+
 CFLAGS+=-DVERSION="\"$(VERSION)\""
 CFLAGS += -Wno-aggressive-loop-optimizations
 
@@ -42,18 +49,13 @@ EXTRA_OBJS+= \
 
 .PHONY: sniffer clean_gdb
 
-all: $(TARGETS)
+all: $(TARGETS) version
 
 #EXTRA_CLEAN += $(TARGETS:%=%.o) $(ARCH)libaldomo.a config.sql
 #EXTRA_MRPROPER += $(ARCH)aldomo-sniffer
 
 clean_gdb:
 		
-#$(TARGETS): $(OBJS)	
-#	$(CC) -o $@.axf $^ $(EXTRA_OBJS) $(LDSCRIPT_APP) $(LDFLAGS) $(LDLIBS)
-#	$(SIZE) $@.axf
-#	$(OBJCOPY) $@.axf -O ihex $@.hex
-
 $(TARGETS) : % : $(OBJS) %.o 
 	$(CC) -o $@.axf $^ $(EXTRA_OBJS) -T$@-mem.ld $(LDFLAGS) $(LDLIBS)
 	$(SIZE) $@.axf
@@ -136,8 +138,11 @@ gdb_master: $(BINARY)
 
 pi:
 	mv cortex-m3-simpleApp.hex image.hex
-	sshpass -p 'raspberry' scp image.hex pi-main.c pi@raspberrypi:~/sdg2/uart/
+	sshpass -p 'raspberry' scp image.hex pi-main.c image.ver pi@raspberrypi:~/sdg2/uart/
 	mv image.hex cortex-m3-simpleApp.hex
+
+version:
+	echo $(VERSION) > image.ver
 
 su: mrproper all program
 	
