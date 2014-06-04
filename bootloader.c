@@ -22,11 +22,11 @@ __IO boolean flashing_finished       = FALSE;			// Flag para indicar si se ha te
  * VARIABLES RELACIONADAS CON EL MODULO DE RADIO
  **/
 RadioPacket rf_tx_packet;				// Instancia unica de la estructura de paquetes a enviar
-__IO StStatus txStatus;					// Resultado de la emision (ACK recibido, ACK no recibido...)
-__IO boolean waitingForTxRadioStatus;	// Flag para indicar si estamos esperando a que txStatus esté disponible
+__IO StStatus radio_tx_status;					// Resultado de la emision (ACK recibido, ACK no recibido...)
+__IO boolean waiting_radio_tx_status;	// Flag para indicar si estamos esperando a que radio_tx_status esté disponible
 
-__IO boolean packetRecived;					//Flag para indicar que hay un paquete recibido pendiente de ser procesado en el bucle main
-__IO uint8_t radioBufferRx[M2C_RADIO_RX_BUFFER];			// Buffer donde se almacenan los paquetes recibidos para su posterior procesado
+__IO boolean packet_received;					//Flag para indicar que hay un paquete recibido pendiente de ser procesado en el bucle main
+__IO uint8_t radio_rx_buffer[M2C_RADIO_RX_BUFFER];			// Buffer donde se almacenan los paquetes recibidos para su posterior procesado
 // No se utiliza buffer de transmision en modo BL ya que solo se envian paquetes de beacon (cortos)
 //__IO uint8_t bufferTx[128];				// Buffer donde se almacenan los datos para su posterior transmisión
 // Indice de la ultima linea de archivo recibida
@@ -37,7 +37,7 @@ __IO uint16_t incoming_version;
 /**
  * TIMERS
  */
-__IO uint32_t nodeGetMasterFirmwareTimer; // Timer para controlar cada cuanto pedimos el firmware al nodo master
+__IO uint32_t node_get_master_firmware_timer; // Timer para controlar cada cuanto pedimos el firmware al nodo master
 
 /**
  * Este metodo envia la petición de version de firmware al nodo padre. Esta llamada bloquea la ejecución
@@ -59,7 +59,7 @@ void nodeIsReadyToGetNewFirm(boolean first)
 	rf_tx_packet.len = M2C_RADIO_HEADER_SIZE + 6 + M2C_RADIO_TAIL_SIZE;
 	rf_tx_packet.seq++;
 
-	M2C_sendPacket_Locking(&rf_tx_packet, &waitingForTxRadioStatus, &txStatus, M2C_RETRY_A_LOT);
+	M2C_sendPacket_Locking(&rf_tx_packet, &waiting_radio_tx_status, &radio_tx_status, M2C_RETRY_A_LOT);
 }
 
 /**
@@ -76,8 +76,8 @@ void ST_RadioTransmitCompleteIsrCallback(StStatus status, uint32_t sfdSentTime, 
 	if (status == ST_PHY_ACK_RECEIVED || status == ST_SUCCESS)
 		M2C_LEDBlink(GLED, 1);
 
-	txStatus = status;
-	waitingForTxRadioStatus = FALSE;
+	radio_tx_status = status;
+	waiting_radio_tx_status = FALSE;
 }
 
 /**
@@ -94,13 +94,13 @@ void ST_RadioReceiveIsrCallback(uint8_t *packet,
 {
 	M2C_LEDBlink(GLED, 1);
 
-	if (!packetRecived)
+	if (!packet_received)
 	{
 		uint8_t i;
 		for (i=0; i<=packet[0]; i++)
-			radioBufferRx[i] = packet[i];
+			radio_rx_buffer[i] = packet[i];
 
-		packetRecived = TRUE;
+		packet_received = TRUE;
 	}
 }
 
@@ -119,7 +119,7 @@ int main(void)
 		M2C_initBoard();
 		M2C_radioInit(&rf_tx_packet);
 		NVIC_SetVectorTable(NVIC_VectTab_FLASH, 0);
-		nodeGetMasterFirmwareTimer = 0;
+		node_get_master_firmware_timer = 0;
 
 		M2C_LEDOn(GLED);
 		M2C_LEDOn(RLED);
@@ -128,75 +128,75 @@ int main(void)
 		FPEC_ClockCmd(ENABLE);
 		FLASH_Unlock();
 
-		uint16_t currentAddress;
-		uint32_t startAddress = 0;
+		uint16_t current_address;
+		uint32_t start_address = 0;
 		line_index = 0;
 		incoming_version = 0;
 
 		while (!flashing_finished)
 		{
 			// Timeout para pedir el firmware al master si llevamos un rato sin recibir nada
-			if (nodeGetMasterFirmwareTimer <= 0)
+			if (node_get_master_firmware_timer <= 0)
 			{
 				nodeIsReadyToGetNewFirm(TRUE);
-				nodeGetMasterFirmwareTimer = M2C_DELAY_LONG;
+				node_get_master_firmware_timer = M2C_DELAY_LONG;
 			}
 			else
-				nodeGetMasterFirmwareTimer--;
+				node_get_master_firmware_timer--;
 
-			if (packetRecived)
+			if (packet_received)
 			{
 				// Si nos llega un paquete actualizamos el timer de espera para pedir fw
-				nodeGetMasterFirmwareTimer = M2C_DELAY_LONG;
+				node_get_master_firmware_timer = M2C_DELAY_LONG;
 
-				RadioPacket* rPacket = (RadioPacket*) radioBufferRx;
+				RadioPacket* radio_packet = (RadioPacket*) radio_rx_buffer;
 
-				switch (rPacket->data[0])
+				switch (radio_packet->data[0])
 				{
 					case M2C_PACKET_TYPE_CONTAINS_FW:
 					{
-						__IO HexLine* hexLine = (HexLine*) &rPacket->data[4];
+						__IO HexLine* hex_line = (HexLine*) &radio_packet->data[4];
 
-						uint16_t sum = hexLine->numBytes;
-						sum += (uint8_t)hexLine->offset;
-						sum += (uint8_t)((hexLine->offset) >> 8);
-						sum += hexLine->type;
+						uint16_t sum = hex_line->num_bytes;
+						sum += (uint8_t)hex_line->offset;
+						sum += (uint8_t)((hex_line->offset) >> 8);
+						sum += hex_line->type;
 						uint8_t i=0;
-						for (i=0; i<hexLine->numBytes; i++)
-							sum += hexLine->data[i];
+						for (i=0; i<hex_line->num_bytes; i++)
+							sum += hex_line->data[i];
 						uint8_t calculated_checksum = 0x100 - (0xFF & sum);
 
 						// Si el checksum de la linea no concuerda no hacemos nada con el,
 						// Ni si quiera incrementa el contador de linea
-						if (calculated_checksum == hexLine->checksum)
+						if (calculated_checksum == hex_line->checksum)
 						{
-							switch(hexLine->type)
+							switch(hex_line->type)
 							{
 								case DATA_RECORD:
 
-									currentAddress = hexLine->offset;
+									current_address = hex_line->offset;
 
-									uint16_t* data16 = (uint16_t*) hexLine->data;
-									uint32_t targetAddress = currentAddress + startAddress;
+									uint16_t* data16 = (uint16_t*) hex_line->data;
+									uint32_t target_address = current_address + start_address;
 
 									// Borramos la página si estamos en el inicio de una
-									if ((targetAddress >= APPLICATION_ADDRESS && targetAddress < FLASH_END_ADDR)
-											&& targetAddress % FLASH_PAGE_SIZE == 0)
-										FLASH_ErasePage(targetAddress);
+									if ((target_address >= APPLICATION_ADDRESS && target_address < FLASH_END_ADDR)
+											&& target_address % FLASH_PAGE_SIZE == 0)
+										FLASH_ErasePage(target_address);
 
 									uint16_t i;
-									for(i=0; i < ( hexLine->numBytes >> 1 ); i++)
-										FLASH_ProgramHalfWord(targetAddress + i*2, data16[i]);
+									for(i=0; i < ( hex_line->num_bytes >> 1 ); i++)
+										FLASH_ProgramHalfWord(target_address + i*2, data16[i]);
 
-									currentAddress += (uint16_t) hexLine->numBytes;
+									current_address += (uint16_t) hex_line->num_bytes;
 									break;
 								case END_OF_FILE_RECORD:
-									M2C_setNodeVersion((uint16_t*)&rPacket->data[1]);
+									M2C_setNodeVersion((uint16_t*)&radio_packet->data[1]);
 									M2C_setBootMode(BOOT_MODE_APP);
 									flashing_finished = 1;
 									break;
 								case EXTENDED_LINEAR_ADDRESS_RECORD:
-									startAddress = ((hexLine->data[0] << 8) + (hexLine->data[1])) << 16;
+									start_address = ((hex_line->data[0] << 8) + (hex_line->data[1])) << 16;
 									break;
 								default:
 									break;
@@ -208,27 +208,27 @@ int main(void)
 
 						// Actualizamos el valor de version que estamos recibiendo por primera vez
 						if (incoming_version <= 0)
-							incoming_version = *((uint16_t*)&rPacket->data[1]);
+							incoming_version = *((uint16_t*)&radio_packet->data[1]);
 
 						// La version que nos estan mandando es diferente a la que estabamos recibiendo inicialmente
 						// Pedimos el firmware desde el principio de nuevo
-						if ((*(uint16_t*)&rPacket->data[1]) != incoming_version)
+						if ((*(uint16_t*)&radio_packet->data[1]) != incoming_version)
 						{
-							incoming_version = *((uint16_t*)&rPacket->data[1]);
+							incoming_version = *((uint16_t*)&radio_packet->data[1]);
 							line_index = 0;
 						}
 
 						// Marcamos aqui el paquete como procesado ya que no lo vamos a usar
 						// y marcarlo luego provoca errores en las llamadas de interrupcion
-						packetRecived = FALSE;
+						packet_received = FALSE;
 
-						if (hexLine->type != END_OF_FILE_RECORD)
+						if (hex_line->type != END_OF_FILE_RECORD)
 							nodeIsReadyToGetNewFirm(FALSE);
 						break;
 					}
 					default:
 						// No se que hacer con este paquete, despreciado.
-						packetRecived = FALSE;
+						packet_received = FALSE;
 						break;
 				}
 			}

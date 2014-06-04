@@ -41,7 +41,7 @@
 #define START_LINEAR_ADDRESS_RECORD         5
 
 typedef struct {
-	uint8_t numBytes;
+	uint8_t num_bytes;
 	uint16_t offset;
 	uint8_t type;
 	uint8_t data[0x10];
