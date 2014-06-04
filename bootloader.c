@@ -153,39 +153,54 @@ int main(void)
 					{
 						__IO HexLine* hexLine = (HexLine*) &rPacket->data[4];
 
-						switch(hexLine->type)
+						uint16_t sum = hexLine->numBytes;
+						sum += (uint8_t)hexLine->offset;
+						sum += (uint8_t)((hexLine->offset) >> 8);
+						sum += hexLine->type;
+						uint8_t i=0;
+						for (i=0; i<hexLine->numBytes; i++)
+							sum += hexLine->data[i];
+						uint8_t calculated_checksum = 0x100 - (0xFF & sum);
+
+						// Si el checksum de la linea no concuerda no hacemos nada con el,
+						// Ni si quiera incrementa el contador de linea
+						if (calculated_checksum == hexLine->checksum)
 						{
-							case DATA_RECORD:
-								currentAddress = hexLine->offset;
+							switch(hexLine->type)
+							{
+								case DATA_RECORD:
 
-								uint16_t* data16 = (uint16_t*) hexLine->data;
-								uint32_t targetAddress = currentAddress + startAddress;
+									currentAddress = hexLine->offset;
 
-								// Borramos la página si estamos en el inicio de una
-								if ((targetAddress >= APPLICATION_ADDRESS && targetAddress < FLASH_END_ADDR)
-										&& targetAddress % FLASH_PAGE_SIZE == 0)
-									FLASH_ErasePage(targetAddress);
+									uint16_t* data16 = (uint16_t*) hexLine->data;
+									uint32_t targetAddress = currentAddress + startAddress;
 
-								uint16_t i;
-								for(i=0; i < ( hexLine->numBytes >> 1 ); i++)
-									FLASH_ProgramHalfWord(targetAddress + i*2, data16[i]);
+									// Borramos la página si estamos en el inicio de una
+									if ((targetAddress >= APPLICATION_ADDRESS && targetAddress < FLASH_END_ADDR)
+											&& targetAddress % FLASH_PAGE_SIZE == 0)
+										FLASH_ErasePage(targetAddress);
 
-								currentAddress += (uint16_t) hexLine->numBytes;
-								break;
-							case END_OF_FILE_RECORD:
-								M2C_setNodeVersion((uint16_t*)&rPacket->data[1]);
-								M2C_setBootMode(BOOT_MODE_APP);
-								flashing_finished = 1;
-								break;
-							case EXTENDED_LINEAR_ADDRESS_RECORD:
-								startAddress = ((hexLine->data[0] << 8) + (hexLine->data[1])) << 16;
-								break;
-							default:
-								break;
+									uint16_t i;
+									for(i=0; i < ( hexLine->numBytes >> 1 ); i++)
+										FLASH_ProgramHalfWord(targetAddress + i*2, data16[i]);
+
+									currentAddress += (uint16_t) hexLine->numBytes;
+									break;
+								case END_OF_FILE_RECORD:
+									M2C_setNodeVersion((uint16_t*)&rPacket->data[1]);
+									M2C_setBootMode(BOOT_MODE_APP);
+									flashing_finished = 1;
+									break;
+								case EXTENDED_LINEAR_ADDRESS_RECORD:
+									startAddress = ((hexLine->data[0] << 8) + (hexLine->data[1])) << 16;
+									break;
+								default:
+									break;
+							}
+
+							// Aumentamos el contador de linea de página para la siguiente vez
+							line_index++;
 						}
-
-						// Aumentamos el contador de linea de página para la siguiente vez
-						line_index++;
 
 						// Marcamos aqui el paquete como procesado ya que no lo vamos a usar
 						// y marcarlo luego provoca errores en las llamadas de interrupcion
