@@ -29,7 +29,10 @@ __IO boolean packetRecived;					//Flag para indicar que hay un paquete recibido 
 __IO uint8_t radioBufferRx[M2C_RADIO_RX_BUFFER];			// Buffer donde se almacenan los paquetes recibidos para su posterior procesado
 // No se utiliza buffer de transmision en modo BL ya que solo se envian paquetes de beacon (cortos)
 //__IO uint8_t bufferTx[128];				// Buffer donde se almacenan los datos para su posterior transmisión
+// Indice de la ultima linea de archivo recibida
 __IO uint32_t line_index;
+// Indicador de version entrante para prevenir fallos
+__IO uint16_t incoming_version;
 
 /**
  * TIMERS
@@ -128,6 +131,7 @@ int main(void)
 		uint16_t currentAddress;
 		uint32_t startAddress = 0;
 		line_index = 0;
+		incoming_version = 0;
 
 		while (!flashing_finished)
 		{
@@ -200,6 +204,18 @@ int main(void)
 
 							// Aumentamos el contador de linea de página para la siguiente vez
 							line_index++;
+						}
+
+						// Actualizamos el valor de version que estamos recibiendo por primera vez
+						if (incoming_version <= 0)
+							incoming_version = *((uint16_t*)&rPacket->data[1]);
+
+						// La version que nos estan mandando es diferente a la que estabamos recibiendo inicialmente
+						// Pedimos el firmware desde el principio de nuevo
+						if ((*(uint16_t*)&rPacket->data[1]) != incoming_version)
+						{
+							incoming_version = *((uint16_t*)&rPacket->data[1]);
+							line_index = 0;
 						}
 
 						// Marcamos aqui el paquete como procesado ya que no lo vamos a usar
