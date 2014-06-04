@@ -243,8 +243,6 @@ int main(void)
 {
 	initBoard();
 
-	masterGetVersionFromUART();
-
 	while (TRUE)
 	{
 		if (packetRecived)
