@@ -122,7 +122,6 @@ int main()
 		printf(ANSI_COLOR_RESET);
 		return 1;
 	}
-	print_ok();
 
 	// Comprobamos que el binario sea correcto
 	while ( fgets ( line, 50 * sizeof(char), file ) != NULL )
@@ -154,6 +153,7 @@ int main()
 		}
 	}
 	rewind(file);
+	print_ok();
 
 	printf("Reiniciando nodo maestro");
 	if (wiringPiSetup() == -1)
@@ -169,7 +169,6 @@ int main()
 	digitalWrite(GPIO_RESET_PIN, 0);
 	delay(500);
 	digitalWrite(GPIO_RESET_PIN, 1);
-	delay(500);
 	print_ok();
 
 	printf("Esperando datos desde la UART\n");
