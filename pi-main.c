@@ -302,7 +302,10 @@ int main()
 				break;
 			}
 			default:
-				printf("\n");
+				write(uart0_filestream, &version, sizeof(hexLine));
+				printf(ANSI_COLOR_RED);
+				printf("Codigo no identificado.\n");
+				printf(ANSI_COLOR_RESET);
 				break;
 		}
 
