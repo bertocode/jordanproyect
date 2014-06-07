@@ -155,75 +155,83 @@ int main(void)
 				{
 					case M2C_PACKET_TYPE_CONTAINS_FW:
 					{
-						__IO HexLine* hex_line = (HexLine*) &radio_packet->data[4];
+						uint8_t n_hex_line;
+						uint8_t data_len = radio_packet->len - M2C_RADIO_HEADER_SIZE - M2C_RADIO_TAIL_SIZE;
+						data_len -= 4; // Restamos nuestra cabecera propia
+						uint8_t count_hex_line = data_len / sizeof(HexLine);
 
-						uint16_t sum = hex_line->num_bytes;
-						sum += (uint8_t)hex_line->offset;
-						sum += (uint8_t)((hex_line->offset) >> 8);
-						sum += hex_line->type;
-						uint8_t i=0;
-						for (i=0; i<hex_line->num_bytes; i++)
-							sum += hex_line->data[i];
-						uint8_t calculated_checksum = 0x100 - (0xFF & sum);
-
-						// Si el checksum de la linea no concuerda no hacemos nada con el,
-						// Ni si quiera incrementa el contador de linea
-						if (calculated_checksum == hex_line->checksum)
+						for (n_hex_line = 0; n_hex_line < count_hex_line; n_hex_line++)
 						{
-							switch(hex_line->type)
+							__IO HexLine* hex_line = (HexLine*) &radio_packet->data[4 + n_hex_line*sizeof(HexLine)];
+
+							uint16_t sum = hex_line->num_bytes;
+							sum += (uint8_t)hex_line->offset;
+							sum += (uint8_t)((hex_line->offset) >> 8);
+							sum += hex_line->type;
+							uint8_t i=0;
+							for (i=0; i<hex_line->num_bytes; i++)
+								sum += hex_line->data[i];
+							uint8_t calculated_checksum = 0x100 - (0xFF & sum);
+
+							// Si el checksum de la linea no concuerda no hacemos nada con el,
+							// Ni si quiera incrementa el contador de linea
+							if (calculated_checksum == hex_line->checksum)
 							{
-								case DATA_RECORD:
+								switch(hex_line->type)
+								{
+									case DATA_RECORD:
 
-									current_address = hex_line->offset;
+										current_address = hex_line->offset;
 
-									uint16_t* data16 = (uint16_t*) hex_line->data;
-									uint32_t target_address = current_address + start_address;
+										uint16_t* data16 = (uint16_t*) hex_line->data;
+										uint32_t target_address = current_address + start_address;
 
-									// Borramos la página si estamos en el inicio de una
-									if ((target_address >= APPLICATION_ADDRESS && target_address < FLASH_END_ADDR)
-											&& target_address % FLASH_PAGE_SIZE == 0)
-										FLASH_ErasePage(target_address);
+										// Borramos la página si estamos en el inicio de una
+										if ((target_address >= APPLICATION_ADDRESS && target_address < FLASH_END_ADDR)
+												&& target_address % FLASH_PAGE_SIZE == 0)
+											FLASH_ErasePage(target_address);
 
-									uint16_t i;
-									for(i=0; i < ( hex_line->num_bytes >> 1 ); i++)
-										FLASH_ProgramHalfWord(target_address + i*2, data16[i]);
+										uint16_t i;
+										for(i=0; i < ( hex_line->num_bytes >> 1 ); i++)
+											FLASH_ProgramHalfWord(target_address + i*2, data16[i]);
 
-									current_address += (uint16_t) hex_line->num_bytes;
-									break;
-								case END_OF_FILE_RECORD:
-									M2C_setNodeVersion((uint16_t*)&radio_packet->data[1]);
-									M2C_setBootMode(BOOT_MODE_APP);
-									flashing_finished = 1;
-									break;
-								case EXTENDED_LINEAR_ADDRESS_RECORD:
-									start_address = ((hex_line->data[0] << 8) + (hex_line->data[1])) << 16;
-									break;
-								default:
-									break;
+										current_address += (uint16_t) hex_line->num_bytes;
+										break;
+									case END_OF_FILE_RECORD:
+										M2C_setNodeVersion((uint16_t*)&radio_packet->data[1]);
+										M2C_setBootMode(BOOT_MODE_APP);
+										flashing_finished = 1;
+										break;
+									case EXTENDED_LINEAR_ADDRESS_RECORD:
+										start_address = ((hex_line->data[0] << 8) + (hex_line->data[1])) << 16;
+										break;
+									default:
+										break;
+								}
+
+								// Aumentamos el contador de linea de página para la siguiente vez
+								line_index++;
 							}
 
-							// Aumentamos el contador de linea de página para la siguiente vez
-							line_index++;
+							// Actualizamos el valor de version que estamos recibiendo por primera vez
+							if (incoming_version <= 0)
+								incoming_version = *((uint16_t*)&radio_packet->data[1]);
+
+							// La version que nos estan mandando es diferente a la que estabamos recibiendo inicialmente
+							// Pedimos el firmware desde el principio de nuevo
+							if ((*(uint16_t*)&radio_packet->data[1]) != incoming_version)
+							{
+								incoming_version = *((uint16_t*)&radio_packet->data[1]);
+								line_index = 0;
+							}
+
+							// Marcamos aqui el paquete como procesado ya que no lo vamos a usar
+							// y marcarlo luego provoca errores en las llamadas de interrupcion
+							packet_received = FALSE;
+
+							if (hex_line->type != END_OF_FILE_RECORD)
+								nodeIsReadyToGetNewFirm(FALSE);
 						}
-
-						// Actualizamos el valor de version que estamos recibiendo por primera vez
-						if (incoming_version <= 0)
-							incoming_version = *((uint16_t*)&radio_packet->data[1]);
-
-						// La version que nos estan mandando es diferente a la que estabamos recibiendo inicialmente
-						// Pedimos el firmware desde el principio de nuevo
-						if ((*(uint16_t*)&radio_packet->data[1]) != incoming_version)
-						{
-							incoming_version = *((uint16_t*)&radio_packet->data[1]);
-							line_index = 0;
-						}
-
-						// Marcamos aqui el paquete como procesado ya que no lo vamos a usar
-						// y marcarlo luego provoca errores en las llamadas de interrupcion
-						packet_received = FALSE;
-
-						if (hex_line->type != END_OF_FILE_RECORD)
-							nodeIsReadyToGetNewFirm(FALSE);
 						break;
 					}
 					default:
