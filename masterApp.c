@@ -24,8 +24,8 @@ __IO uint8_t radioBufferTx[M2C_RADIO_TX_BUFFER];	// Buffer donde se almacenan lo
 UART_InitTypeDef UART_InitStructure;
 SC_DMA_InitTypeDef SC_DMA_InitStructure;
 
-#define SERIAL_RX_BUFFER_LENGTH 22
-#define SERIAL_TX_BUFFER_LENGTH 5
+#define SERIAL_RX_BUFFER_LENGTH 21
+#define SERIAL_TX_BUFFER_LENGTH 4
 uint8_t serialTxBuffer[SERIAL_TX_BUFFER_LENGTH];
 uint8_t serialRxBuffer[SERIAL_RX_BUFFER_LENGTH];
 
@@ -81,14 +81,14 @@ void initBoard(void)
 	SC_DMA_ChannelReset(SC1_DMA, DMA_ChannelReset_Tx);
 	/* SC1 DMA channel Tx config */
 	SC_DMA_InitStructure.DMA_BeginAddrA = (uint32_t)serialTxBuffer;
-	SC_DMA_InitStructure.DMA_EndAddrA = (uint32_t)(serialTxBuffer + SERIAL_TX_BUFFER_LENGTH - 1);
+	SC_DMA_InitStructure.DMA_EndAddrA = (uint32_t)(serialTxBuffer + SERIAL_TX_BUFFER_LENGTH);
 	SC_DMA_Init(SC1_DMA_ChannelTx, &SC_DMA_InitStructure);
 
 	/* Reset DMA Channel Rx */
 	SC_DMA_ChannelReset(SC1_DMA, DMA_ChannelReset_Rx);
 	/* SC1 DMA channel Rx config */
 	SC_DMA_InitStructure.DMA_BeginAddrA = (uint32_t)serialRxBuffer;
-	SC_DMA_InitStructure.DMA_EndAddrA = (uint32_t)(serialRxBuffer + SERIAL_RX_BUFFER_LENGTH - 1);
+	SC_DMA_InitStructure.DMA_EndAddrA = (uint32_t)(serialRxBuffer + SERIAL_RX_BUFFER_LENGTH);
 	SC_DMA_Init(SC1_DMA_ChannelRx, &SC_DMA_InitStructure);
 
 }
@@ -139,7 +139,7 @@ int masterSendNodeHexFileLine(uint16_t dest, uint8_t line[])
 
     // Metemos los datos que nos dan al paquete que vamos a transmitir
     uint32_t i;
-    for (i=0; i < SERIAL_RX_BUFFER_LENGTH; i++)
+    for (i=0; i < SERIAL_RX_BUFFER_LENGTH; i++) // TODO: Este limite habrá que cambiarlo
     {
     	rf_tx_packet.data[4+i] = line[i];
     	size++;
@@ -161,17 +161,32 @@ int masterSendNodeHexFileLine(uint16_t dest, uint8_t line[])
  */
 void masterSendNodeFirmware(uint16_t dest)
 {
-	// Preparamos el buffer de recepcion serie
-	SC_DMA_ChannelLoadEnable(SC1_DMA, DMA_ChannelLoad_ARx);
+	uint8_t max_radio_data_buffer_size = M2C_RADIO_MAX_DATA_SIZE - 4; // Restamos 4 por nuestra propia cabecera de control
+	uint8_t radio_data_buffer_size = 0;
 
-	// Escribimos algo en el puerto serie a la espera de que la Rpi nos conteste
-	SC_DMA_ChannelLoadEnable(SC1_DMA, DMA_ChannelLoad_ATx);
-	while (SC_DMA_GetFlagStatus(SC1_DMA, DMA_FLAG_TXAACK) == SET)
-	  WDG_ReloadCounter();
+	do
+	{
+		// Preparamos el buffer de recepcion serie
+		SC_DMA_ChannelLoadEnable(SC1_DMA, DMA_ChannelLoad_ARx);
 
-	// Esperamos a recibir la linea del archivo HEX
-	while (SC_DMA_GetFlagStatus(SC1_DMA, DMA_FLAG_RXAACK) == SET)
-	  WDG_ReloadCounter();
+		// Escribimos algo en el puerto serie a la espera de que la Rpi nos conteste
+		SC_DMA_ChannelLoadEnable(SC1_DMA, DMA_ChannelLoad_ATx);
+		while (SC_DMA_GetFlagStatus(SC1_DMA, DMA_FLAG_TXAACK) == SET)
+		  WDG_ReloadCounter();
+
+		// Esperamos a recibir la linea del archivo HEX
+		while (SC_DMA_GetFlagStatus(SC1_DMA, DMA_FLAG_RXAACK) == SET)
+		  WDG_ReloadCounter();
+
+		HexLine* incoming_hexline = (HexLine*)&serialRxBuffer;
+
+		radio_data_buffer_size +=  sizeof(HexLine);
+
+		// TODO: Almacenar serialRxBuffer en un buffer mayor
+		if (incoming_hexline->type == END_OF_FILE_RECORD)
+			break;
+	}
+	while(radio_data_buffer_size < max_radio_data_buffer_size);
 
 	masterSendNodeHexFileLine(dest, serialRxBuffer);
 }
